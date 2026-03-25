@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RANKFIT ARENA - Dashboard TV</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: #09090b;
+            color: white;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .italic-heavy { font-style: italic; font-weight: 900; letter-spacing: -0.05em; }
+        
+        .card-glass {
+            background: rgba(24, 24, 27, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(63, 63, 70, 0.5);
+        }
+
+        @keyframes pulse-red {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+            50% { box-shadow: 0 0 30px 15px rgba(220, 38, 38, 0); }
+        }
+        .live-border { border: 4px solid #dc2626; animation: pulse-red 2s infinite; }
+
+        @keyframes scroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        .ticker-track {
+            display: flex;
+            width: max-content;
+            animation: scroll 40s linear infinite;
+        }
+
+        @keyframes fadeInScale {
+            0% { opacity: 0; transform: scale(0.9); filter: blur(10px); }
+            100% { opacity: 1; transform: scale(1); filter: blur(0); }
+        }
+        .motivational-mode { animation: fadeInScale 1.5s ease-out forwards; }
+
+        .text-gradient {
+            background: linear-gradient(to right, #dc2626, #f97316);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+    </style>
+</head>
+<body class="p-10 flex flex-col justify-between">
+
+    <div class="flex justify-between items-start">
+        <div>
+            <h1 class="text-7xl italic-heavy uppercase leading-none tracking-tighter">RANKFIT <span class="text-red-600">ARENA</span></h1>
+        </div>
+
+        <div class="card-glass rounded-3xl p-8 w-96 shadow-2xl">
+            <div class="flex items-center gap-3 mb-6">
+                <span class="text-2xl">🏆</span>
+                <h2 class="text-zinc-400 font-black uppercase text-sm tracking-[0.2em]">Líderes do Dia</h2>
+            </div>
+            <div id="top3-container" class="space-y-5"></div>
+        </div>
+    </div>
+
+    <div id="live-arena" class="flex-1 flex items-center justify-center gap-16 transition-all duration-700">
+        </div>
+
+    <div class="fixed bottom-0 left-0 w-full bg-zinc-950/90 border-t border-zinc-800 py-8 overflow-hidden backdrop-blur-md">
+        <div id="ticker" class="ticker-track"></div>
+    </div>
+
+    <script>
+        let previousLiveIds = new Set();
+        let currentQuote = "";
+
+        const phrases = [
+            "A ARENA TE ESPERA. ESTÁ NA HORA DO SHOW.",
+            "QUEM TREINA SOZINHO VENCE. QUEM TREINA NA ARENA EVOLUI.",
+            "SUA ÚNICA COMPETIÇÃO É QUEM VOCÊ FOI ONTEM.",
+            "NÃO PARE QUANDO ESTIVER CANSADO. PARE QUANDO TERMINAR.",
+            "O SUOR DE HOJE É O RESULTADO DE AMANHÃ.",
+            "TRANSFORME SEU CORPO, DOMINE SUA MENTE.",
+            "A DISCIPLINA É A PONTE ENTRE METAS E REALIZAÇÕES.",
+            "NA ARENA, CADA CALORIA QUEIMADA É UMA VITÓRIA.",
+            "SEJA MAIS FORTE QUE SUA MELHOR DESCULPA.",
+            "GRANDEZA NÃO É DADA, É CONQUISTADA AQUI DENTRO."
+        ];
+
+        function getAvatarSrc(user) {
+            if (user.avatar && user.avatar.length > 50) {
+                return user.avatar.startsWith('data:') ? user.avatar : `data:image/png;base64,${user.avatar}`;
+            }
+            return `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=27272a&color=fff&size=256`;
+        }
+
+        function connect() {
+            const socket = new WebSocket("ws://hfitpro-api.fly.dev/ws/tv");
+
+            socket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                const ranking = data.ranking || [];
+                const liveUsers = ranking.filter(u => u.is_live);
+                
+                updateTop3(ranking.slice(0, 3));
+                updateLiveArena(liveUsers);
+                updateTicker(ranking.filter(u => !u.is_live).slice(0, 20));
+            };
+
+            socket.onclose = () => setTimeout(connect, 2000);
+        }
+
+        function updateTop3(top3) {
+            const colors = ['#facc15', '#d4d4d8', '#f97316'];
+            document.getElementById('top3-container').innerHTML = top3.map((user, i) => `
+                <div class="flex justify-between items-center font-black">
+                    <div class="flex items-center gap-4">
+                        <span class="text-2xl" style="color: ${colors[i]}">#${i+1}</span>
+                        <span class="text-2xl tracking-tight">${user.name.split(' ')[0]}</span>
+                    </div>
+                    <span class="text-red-500 text-2xl">${Math.round(user.calories || 0)} <span class="text-[10px] text-zinc-500 uppercase tracking-widest">kcal</span></span>
+                </div>
+            `).join('');
+        }
+
+        function updateLiveArena(users) {
+            const liveArena = document.getElementById('live-arena');
+            
+            if (users.length === 0) {
+                // Se não houver ninguém, escolhe uma frase se ainda não tiver uma ativa
+                if (!currentQuote || previousLiveIds.size > 0) {
+                    currentQuote = phrases[Math.floor(Math.random() * phrases.length)];
+                }
+                
+                liveArena.innerHTML = `
+                    <div class="text-center max-w-5xl motivational-mode">
+                        <div class="text-red-600 text-4xl mb-6">●</div>
+                        <h2 class="text-6xl md:text-8xl italic-heavy uppercase leading-tight tracking-tighter opacity-80">
+                            ${currentQuote}
+                        </h2>
+                    </div>
+                `;
+                previousLiveIds = new Set();
+                return;
+            }
+
+            // Se houver alguém live, reseta a frase para a próxima vez
+            currentQuote = "";
+            const currentIds = new Set(users.map(u => u.id));
+            const cardScale = users.length <= 3 ? 'scale-125 mx-12' : 'scale-100 mx-4';
+            
+            liveArena.innerHTML = users.map(user => {
+                const isNew = !previousLiveIds.has(user.id);
+                return `
+                    <div class="flex flex-col items-center transition-all duration-500 ${isNew ? 'new-live-user' : ''} ${cardScale}">
+                        <div class="relative mb-8">
+                            <div class="absolute -top-5 left-1/2 -translate-x-1/2 bg-red-600 text-white text-[12px] font-black px-4 py-1 rounded-full z-20 tracking-widest">LIVE</div>
+                            <div class="w-56 h-56 rounded-full bg-zinc-900 live-border flex items-center justify-center overflow-hidden">
+                                <img src="${getAvatarSrc(user)}" class="w-full h-full object-cover">
+                            </div>
+                        </div>
+                        <h2 class="text-5xl font-black mb-3 tracking-tighter uppercase">${user.name}</h2>
+                        <div class="flex items-center gap-3">
+                            <span class="text-orange-500 text-3xl">🔥</span>
+                            <span class="text-7xl font-black text-gradient leading-none">${Math.round(user.calories || 0)}</span>
+                            <span class="text-zinc-500 font-black text-xs self-end mb-2 tracking-widest">KCAL</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            previousLiveIds = currentIds;
+        }
+
+        function updateTicker(users) {
+            const ticker = document.getElementById('ticker');
+            const content = users.map(user => `
+                <div class="flex items-center gap-6 px-16 border-r border-zinc-800/50">
+                    <div class="w-12 h-12 rounded-full bg-zinc-800 overflow-hidden ring-2 ring-zinc-700">
+                        <img src="${getAvatarSrc(user)}" class="w-full h-full object-cover grayscale opacity-80">
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-zinc-500 font-black uppercase text-[11px] tracking-widest">${user.name}</span>
+                        <span class="font-black text-xl">${Math.round(user.calories || 0)} <span class="text-zinc-600 text-[10px] ml-1 uppercase">kcal</span></span>
+                    </div>
+                </div>
+            `).join('');
+            
+            ticker.innerHTML = content + content; 
+        }
+
+        connect();
+    </script>
+</body>
+</html>
