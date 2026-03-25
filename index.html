@@ -100,7 +100,7 @@
         }
 
         function connect() {
-            const socket = new WebSocket("ws://hfitpro-api.fly.dev/ws/tv");
+            const socket = new WebSocket("wss://hfitpro-api.fly.dev/ws/tv");
 
             socket.onmessage = (event) => {
                 const data = JSON.parse(event.data);
